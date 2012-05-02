@@ -1,5 +1,5 @@
 /*
-**  mod_v8.cpp -- Apache mongo module
+**  mod_v8.cpp -- Apache v8 module
 **
 **  Then activate it in Apache's httpd.conf file:
 **
@@ -28,7 +28,7 @@ extern "C" {
 #include "ap_config.h"
 #include "apr_strings.h"
 
-//#include "apreq2/apreq_module_apache2.h"
+#include "apreq2/apreq_module_apache2.h"
 #ifdef __cplusplus
 }
 #endif
@@ -167,6 +167,57 @@ static v8::Handle<v8::Value> v8_rputs(const v8::Arguments& args)
     return v8::Undefined();
 }
 
+static v8::Handle<v8::Value> v8_header(const v8::Arguments& args)
+{
+    if (args.Length() < 1) {
+        return v8::Undefined();
+    }
+
+    v8::HandleScope scope;
+    v8::Handle<v8::Value> arg = args[0];
+    v8::Local<v8::Object> self = args.Holder();
+    v8::Local<v8::External> wrap
+        = v8::Local<v8::External>::Cast(self->GetInternalField(0));
+    v8::String::Utf8Value value(arg);
+
+    request_rec *r = static_cast<request_rec*>(wrap->Value());
+
+    const char *header = apr_table_get(r->headers_in, *value);
+
+    if (header) {
+        return v8::String::New(header);
+    } else {
+        return v8::Undefined();
+    }
+}
+
+static v8::Handle<v8::Value> v8_params(const v8::Arguments& args)
+{
+    if (args.Length() < 1) {
+        return v8::Undefined();
+    }
+
+    v8::HandleScope scope;
+    v8::Handle<v8::Value> arg = args[0];
+    v8::Local<v8::Object> self = args.Holder();
+    v8::Local<v8::External> wrap
+        = v8::Local<v8::External>::Cast(self->GetInternalField(1));
+    v8::String::Utf8Value value(arg);
+
+    apr_table_t *tbl = static_cast<apr_table_t*>(wrap->Value());
+    if (!tbl) {
+        return v8::Undefined();
+    }
+
+    const char *param = apr_table_get(tbl, *value);
+
+    if (param) {
+        return v8::String::New(param);
+    } else {
+        return v8::Undefined();
+    }
+}
+
 /* content handler */
 static int v8_handler(request_rec *r)
 {
@@ -187,18 +238,37 @@ static int v8_handler(request_rec *r)
         _RDEBUG(r, "v8 isolate: enabled");
 #endif
         {
+            //Request parameters.
+            apreq_handle_t *apreq = apreq_handle_apache2(r);
+            apr_table_t *params = apreq_params(apreq, r->pool);
+
             //Create a stack-allocated handle scope.
             v8::HandleScope scope;
 
-            //Create function
+            //Create function.
             v8::Handle<v8::ObjectTemplate> global = v8::ObjectTemplate::New();
 
-            //Create function.
-            global->SetInternalFieldCount(1);
+            global->SetInternalFieldCount(2);
             global->Set(v8::String::New("log"),
                         v8::FunctionTemplate::New(v8_log));
             global->Set(v8::String::New("rputs"),
                         v8::FunctionTemplate::New(v8_rputs));
+
+            //Request Objects.
+            v8::Handle<v8::ObjectTemplate> robj = v8::ObjectTemplate::New();
+            robj->Set(v8::String::New("method"),
+                      v8::String::New(r->method));
+            robj->Set(v8::String::New("uri"),
+                      v8::String::New(r->uri));
+            robj->Set(v8::String::New("filename"),
+                      v8::String::New(r->filename));
+            global->Set ("request", robj);
+
+            //Header function.
+            global->Set("header", v8::FunctionTemplate::New(v8_header));
+
+            //Parameter function.
+            global->Set("params", v8::FunctionTemplate::New(v8_params));
 
             //Create a new context.
             v8::Persistent<v8::Context> context = v8::Context::New();
@@ -209,18 +279,19 @@ static int v8_handler(request_rec *r)
 
             v8::Handle<v8::Object> obj = global->NewInstance();
             obj->SetInternalField(0, v8::External::New(r));
+            obj->SetInternalField(1, v8::External::New(params));
             context->Global()->Set(v8::String::New("ap"), obj);
 
             //Create a string containing the JavaScript source code.
             const char *src;
             apr_size_t len;
-            apr_pool_t *tpool;
+            apr_pool_t *ptemp;
             apr_status_t rv;
 
             //Read javascript source
-            apr_pool_create(&tpool, r->pool);
+            apr_pool_create(&ptemp, r->pool);
             if (v8_read_file(r->filename, &src, &len,
-                             r->pool, tpool) == APR_SUCCESS) {
+                             r->pool, ptemp) == APR_SUCCESS) {
                 v8::Handle<v8::String> source = v8::String::New(src, len);
                 v8::TryCatch try_catch;
 
@@ -238,7 +309,7 @@ static int v8_handler(request_rec *r)
                 _RERR(r, "v8: Failed to read: %s", r->filename);
                 retval = HTTP_INTERNAL_SERVER_ERROR;
             }
-            apr_pool_clear(tpool);
+            apr_pool_clear(ptemp);
 
             //Dispose the persistent context.
             context.Dispose();

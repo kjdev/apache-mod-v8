@@ -150,13 +150,37 @@ AS_IF([test "x$with_apu" != xno],
   AC_MSG_RESULT(disable)
 )
 
+# Checks for apreq2.
+AC_ARG_WITH(apreq2,
+  [AC_HELP_STRING([--with-apreq2=PATH], [apreq2 config path [default=yes]])],
+  [APREQ2_CONFIG="$withval"],
+  [with_apreq2=yes]
+)
+
+AS_IF([test "x$with_apreq2" != xno],
+  [
+   if test ! -x "${APREQ2_CONFIG}" -o -z "${APREQ2_CONFIG}"; then
+     SEARCH_PATH="/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin"
+     AC_PATH_PROG(APREQ2_CONFIG, apreq2-config, no, ${SEARCH_PATH})
+     AS_IF(
+       [test "x${APREQ2_CONFIG}" = xno], AC_MSG_ERROR([apreq2-config not found]),
+       [test "x${APREQ2_CONFIG}" = x], AC_MSG_ERROR([apreq2-config not found])
+     )
+   fi
+   APREQ2_INCLUDES=`${APREQ2_CONFIG} --includes 2> /dev/null`
+   APREQ2_LDFLAGS=`${APREQ2_CONFIG} --ldflags 2> /dev/null`
+   APREQ2_LIBS=`${APREQ2_CONFIG} --libs 2> /dev/null`
+  ],
+  AC_MSG_ERROR(apreq2 not found)
+)
+
 # Apache libraries
 APACHE_MODULEDIR="${APXS_LIBEXECDIR}"
-APACHE_INCLUDES="${APXS_INCLUDES} ${APR_INCLUDES} ${APU_INCLUDES}"
+APACHE_INCLUDES="${APXS_INCLUDES} ${APR_INCLUDES} ${APU_INCLUDES} ${APREQ2_INCLUDES}"
 APACHE_CFLAGS="${APXS_CFLAGS} ${APR_CFLAGS} ${APU_CFLAGS}"
 APACHE_CPPFLAGS="${APXS_CPPFLAGS} ${APR_CPPFLAGS} ${APU_CPPFLAGS}"
-APACHE_LDFLAGS="${APXS_LDFLAGS} ${APR_LDFLAGS} ${APU_LDFLAGS}"
-APACHE_LIBS="${APXS_LIBS} ${APR_LIBS} ${APU_LIBS}"
+APACHE_LDFLAGS="${APXS_LDFLAGS} ${APR_LDFLAGS} ${APU_LDFLAGS} ${APREQ2_LDFLAGS}"
+APACHE_LIBS="${APXS_LIBS} ${APR_LIBS} ${APU_LIBS} ${APREQ2_LIBS}"
 
 AC_SUBST(APACHE_MODULEDIR)
 AC_SUBST(APACHE_INCLUDES)

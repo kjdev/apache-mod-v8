@@ -1,0 +1,33 @@
+//apache log (critical error log)
+//ap.log(#val#)
+ap.log("hi there");
+
+//output
+//ap.rputs(#val#)
+ap.rputs("Hello, World" + "\n");
+
+//request parameter (method/uri/filename)
+//ap.request.#val#
+var method = ap.request.method;
+var uri = ap.request.uri;
+var filename = ap.request.filename;
+
+ap.rputs("Method = " + method + "\n");
+ap.rputs("Uri = " + uri + "\n");
+ap.rputs("Filename = " + filename + "\n");
+
+//request header
+//ap.header(#val#)
+var host = ap.header("Host");
+var user_agent = ap.header("User-Agent");
+
+ap.rputs("Header: Host = " + host + "\n");
+ap.rputs("Header: User-Agent = " + user_agent + "\n");
+
+//request params
+//ap.params(#val#)
+var hoge = ap.params("hoge");
+var test = ap.params("test");
+
+ap.rputs("Params: hoge = " + hoge + "\n");
+ap.rputs("Params: test = " + test + "\n");
