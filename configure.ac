@@ -25,6 +25,18 @@ AS_IF([test "x${ENABLED_V8_ISOLATE}" = xyes],
     [AC_DEFINE([AP_USE_V8_ISOLATE], [1], [enable v8 isolate])]
 )
 
+# Option for v8 debug log level
+AC_ARG_WITH(v8-debug-log,
+  AC_HELP_STRING([--with-v8-debug-log=LEVEL],
+    [v8 debug log level [default=no]]),
+  [V8_DEBUG_LOG="${withval}"],
+  [V8_DEBUG_LOG=no]
+)
+AS_IF([test "x${V8_DEBUG_LOG}" != xno],
+    [AC_DEFINE_UNQUOTED([AP_V8_DEBUG_LOG_LEVEL],
+      [${V8_DEBUG_LOG}], [v8 debug log level])]
+)
+
 # Checks for v8
 AC_ARG_WITH(
   v8,

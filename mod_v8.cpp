@@ -33,12 +33,13 @@ extern "C" {
 }
 #endif
 
-//#define V8_CONTENT_TYPE "application/json; charset=utf-8";
-//#define V8_CONTENT_TYPE "application/x-javascript; charset=utf-8";
-#define V8_CONTENT_TYPE "text/html; charset=UTF-8";
+#define V8_CONTENT_TYPE "text/plain; charset=UTF-8";
 
-#define V8_DEBUG_LOG_LEVEL APLOG_CRIT
-//#define V8_DEBUG_LOG_LEVEL APLOG_DEBUG
+#ifdef AP_V8_DEBUG_LOG_LEVEL
+#define V8_DEBUG_LOG_LEVEL AP_V8_DEBUG_LOG_LEVEL
+#else
+#define V8_DEBUG_LOG_LEVEL APLOG_DEBUG
+#endif
 
 #define _RERR(r, format, args...)                                   \
     ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0,                        \
@@ -46,12 +47,18 @@ extern "C" {
 #define _SERR(s, format, args...)                                  \
     ap_log_error(APLOG_MARK, APLOG_CRIT, 0,                        \
                  s, "%s(%d) "format, __FILE__, __LINE__, ##args);
+#define _PERR(p, format, args...)                                   \
+    ap_log_perror(APLOG_MARK, APLOG_CRIT, 0,                        \
+                  p, "%s(%d) "format, __FILE__, __LINE__, ##args);
 #define _RDEBUG(r, format, args...)                                     \
     ap_log_rerror(APLOG_MARK, V8_DEBUG_LOG_LEVEL, 0,                    \
                   r, "[DEBUG] %s(%d) "format, __FILE__, __LINE__, ##args);
 #define _SDEBUG(s, format, args...)                                     \
     ap_log_error(APLOG_MARK, V8_DEBUG_LOG_LEVEL, 0,                     \
                  s, "[DEBUG] %s(%d) "format, __FILE__, __LINE__, ##args);
+#define _PDEBUG(p, format, args...)                                     \
+    ap_log_perror(APLOG_MARK, V8_DEBUG_LOG_LEVEL, 0,                    \
+                  p, "[DEBUG] %s(%d) "format, __FILE__, __LINE__, ##args);
 
 /* Functions */
 static int v8_handler(request_rec* r);
@@ -102,11 +109,13 @@ static apr_status_t v8_read_file(const char *path,
     rv = apr_file_open(&fp, path, APR_READ|APR_BINARY|APR_BUFFERED,
                        APR_OS_DEFAULT, ptemp);
     if (rv != APR_SUCCESS) {
+        _PERR(p, "v8: file open: %s", path);
         return rv;
     }
 
     rv = apr_file_info_get(&fi, APR_FINFO_SIZE, fp);
     if (rv != APR_SUCCESS) {
+        _PERR(p, "v8: file info get: %s", path);
         return rv;
     }
 
@@ -117,6 +126,7 @@ static apr_status_t v8_read_file(const char *path,
 
     rv = apr_brigade_pflatten(bb, &c, &len, p);
     if (rv) {
+        _PERR(p, "v8: apr_brigade_pflatten: %s", path);
         return rv;
     }
 
@@ -142,7 +152,7 @@ static v8::Handle<v8::Value> v8_log(const v8::Arguments& args)
 
     request_rec *r = static_cast<request_rec*>(wrap->Value());
 
-    _RERR( r, "v8::log: %s", *value);
+    _RERR(r, "v8::log: %s", *value);
 
     return v8::Undefined();
 }
@@ -163,6 +173,31 @@ static v8::Handle<v8::Value> v8_rputs(const v8::Arguments& args)
     request_rec *r = static_cast<request_rec*>(wrap->Value());
 
     ap_rputs(*value, r);
+
+    return v8::Undefined();
+}
+
+static v8::Handle<v8::Value> v8_set_content_type(const v8::Arguments& args)
+{
+    if (args.Length() < 1) {
+        return v8::Undefined();
+    }
+
+    v8::HandleScope scope;
+    v8::Handle<v8::Value> arg = args[0];
+    v8::Local<v8::Object> self = args.Holder();
+    v8::Local<v8::External> wrap
+        = v8::Local<v8::External>::Cast(self->GetInternalField(0));
+    v8::String::Utf8Value value(arg);
+
+    request_rec *r = static_cast<request_rec*>(wrap->Value());
+
+    if (value.length() > 0) {
+        char *ct = apr_psprintf(r->pool, "%s", *value);
+        if (ct) {
+            ap_set_content_type(r, ct);
+        }
+    }
 
     return v8::Undefined();
 }
@@ -227,24 +262,27 @@ static v8::Handle<v8::Value> v8_require(const v8::Arguments& args)
                        APR_READ | APR_BINARY | APR_XTHREAD, APR_OS_DEFAULT,
                        r->pool);
     if (rv != APR_SUCCESS) {
-        _RDEBUG(r, "v8_require: file open: %s", *value);
+        _RERR(r, "v8: file open: %s", *value);
         return v8::Undefined();
     }
 
     rv = apr_file_info_get(&fi, APR_FINFO_SIZE, fp);
     if (rv != APR_SUCCESS || fi.size <= 0) {
+        _RERR(r, "v8: file info: %s", *value);
         apr_file_close(fp);
         return v8::Undefined();
     }
 
     src = apr_palloc(r->pool, fi.size);
     if (!src) {
+        _RERR(r, "v8: apr_palloc");
         apr_file_close(fp);
         return v8::Undefined();
     }
 
     rv = apr_file_read_full(fp, src, fi.size, &bytes);
     if (rv != APR_SUCCESS || bytes != fi.size) {
+        _RERR(r, "v8: file read: %s", *value);
         apr_file_close(fp);
         return v8::Undefined();
     }
@@ -352,6 +390,8 @@ static int v8_handler(request_rec *r)
                         v8::FunctionTemplate::New(v8_log));
             global->Set(v8::String::New("rputs"),
                         v8::FunctionTemplate::New(v8_rputs));
+            global->Set(v8::String::New("content_type"),
+                        v8::FunctionTemplate::New(v8_set_content_type));
             global->Set(v8::String::New("dirname"),
                         v8::FunctionTemplate::New(v8_dirname));
             global->Set(v8::String::New("require"),

@@ -65,3 +65,7 @@ test.v8:
 
     //require: ap.require(#val#)
     ap.require(ap.dirname(ap.request.filename) + "/sub.v8");
+
+    //content-type: ap.content_type(#val#)
+    //default: text/plain; charset=UTF-8
+    ap.content_type("text/html; charset=UTF-8");
