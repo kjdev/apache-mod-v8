@@ -1,0 +1,8 @@
+
+ap.rputs("[load] sub.v8\n");
+
+function sub_function() {
+    ap.rputs("function: sub_function()\n");
+}
+
+var sub_data = 'Sub_Data';

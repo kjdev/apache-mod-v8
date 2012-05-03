@@ -167,6 +167,105 @@ static v8::Handle<v8::Value> v8_rputs(const v8::Arguments& args)
     return v8::Undefined();
 }
 
+static v8::Handle<v8::Value> v8_dirname(const v8::Arguments& args)
+{
+    if (args.Length() < 1) {
+        return v8::Undefined();
+    }
+
+    v8::HandleScope scope;
+    v8::Handle<v8::Value> arg = args[0];
+    v8::Local<v8::Object> self = args.Holder();
+    v8::Local<v8::External> wrap
+        = v8::Local<v8::External>::Cast(self->GetInternalField(0));
+    v8::String::Utf8Value value(arg);
+
+    if (value.length() == 0) {
+        return v8::Undefined();
+    }
+
+    char *s = *value + value.length() - 1;
+
+    while (s && *s == '/') {
+        *s = '\0';
+        s = *value + strlen(*value) - 1;
+    }
+
+    s = strrchr(*value, '/');
+    if (s != NULL) {
+        if (s == *value) {
+            return v8::String::New("/");
+        }
+        *s = '\0';
+    }
+
+    return v8::String::New(*value);
+}
+
+static v8::Handle<v8::Value> v8_require(const v8::Arguments& args)
+{
+    if (args.Length() < 1) {
+        return v8::Undefined();
+    }
+
+    v8::HandleScope scope;
+    v8::Handle<v8::Value> arg = args[0];
+    v8::Local<v8::Object> self = args.Holder();
+    v8::Local<v8::External> wrap
+        = v8::Local<v8::External>::Cast(self->GetInternalField(0));
+    v8::String::Utf8Value value(arg);
+
+    request_rec *r = static_cast<request_rec*>(wrap->Value());
+
+    apr_status_t rv;
+    apr_file_t *fp;
+    apr_finfo_t fi;
+    apr_size_t bytes;
+    void *src;
+
+    rv = apr_file_open(&fp, *value,
+                       APR_READ | APR_BINARY | APR_XTHREAD, APR_OS_DEFAULT,
+                       r->pool);
+    if (rv != APR_SUCCESS) {
+        _RDEBUG(r, "v8_require: file open: %s", *value);
+        return v8::Undefined();
+    }
+
+    rv = apr_file_info_get(&fi, APR_FINFO_SIZE, fp);
+    if (rv != APR_SUCCESS || fi.size <= 0) {
+        apr_file_close(fp);
+        return v8::Undefined();
+    }
+
+    src = apr_palloc(r->pool, fi.size);
+    if (!src) {
+        apr_file_close(fp);
+        return v8::Undefined();
+    }
+
+    rv = apr_file_read_full(fp, src, fi.size, &bytes);
+    if (rv != APR_SUCCESS || bytes != fi.size) {
+        apr_file_close(fp);
+        return v8::Undefined();
+    }
+
+    apr_file_close(fp);
+
+    {
+        //Read javascript source
+        v8::Handle<v8::String> source = v8::String::New((char *)src, fi.size);
+        v8::TryCatch try_catch;
+
+        //Compile the source code.
+        v8::Handle<v8::Script> script = v8::Script::Compile(source);
+
+        //Run the script to return.
+        return script->Run();
+    }
+
+    return v8::Undefined();
+}
+
 static v8::Handle<v8::Value> v8_header(const v8::Arguments& args)
 {
     if (args.Length() < 1) {
@@ -253,6 +352,10 @@ static int v8_handler(request_rec *r)
                         v8::FunctionTemplate::New(v8_log));
             global->Set(v8::String::New("rputs"),
                         v8::FunctionTemplate::New(v8_rputs));
+            global->Set(v8::String::New("dirname"),
+                        v8::FunctionTemplate::New(v8_dirname));
+            global->Set(v8::String::New("require"),
+                        v8::FunctionTemplate::New(v8_require));
 
             //Request Objects.
             v8::Handle<v8::ObjectTemplate> robj = v8::ObjectTemplate::New();

@@ -59,3 +59,9 @@ test.v8:
 
     //request params: ap.params(#val#)
     ap.rputs("Params: test = " + ap.params("test") + "\n");
+
+    //dirname: ap.dirname(#val#)
+    ap.rputs(ap.dirname(ap.request.filename) + "\n");
+
+    //require: ap.require(#val#)
+    ap.require(ap.dirname(ap.request.filename) + "/sub.v8");

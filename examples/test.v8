@@ -31,3 +31,16 @@ var test = ap.params("test");
 
 ap.rputs("Params: hoge = " + hoge + "\n");
 ap.rputs("Params: test = " + test + "\n");
+
+//dirname
+//ap.dirname(#val#)
+var dir = ap.dirname(filename);
+
+ap.rputs(dir + "\n");
+
+//require
+//ap.require(#val#)
+ap.require(dir + '/sub.v8');
+
+sub_function();
+ap.rputs(sud_data + "\n");
