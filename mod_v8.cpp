@@ -299,26 +299,36 @@ static v8::Handle<v8::Value> v8_require(const v8::Arguments& args)
 
 static v8::Handle<v8::Value> v8_header(const v8::Arguments& args)
 {
-    if (args.Length() < 1) {
-        return v8::Undefined();
-    }
-
     v8::HandleScope scope;
-    v8::Handle<v8::Value> arg = args[0];
     v8::Local<v8::Object> self = args.Holder();
     v8::Local<v8::External> wrap
         = v8::Local<v8::External>::Cast(self->GetInternalField(0));
-    v8::String::Utf8Value value(arg);
 
     request_rec *r = static_cast<request_rec*>(wrap->Value());
 
-    const char *header = apr_table_get(r->headers_in, *value);
+    if (args.Length() >= 1) {
+        v8::Handle<v8::Value> arg = args[0];
+        v8::String::Utf8Value value(arg);
 
-    if (header) {
-        return v8::String::New(header);
+        const char *header = apr_table_get(r->headers_in, *value);
+
+        if (header) {
+            return v8::String::New(header);
+        }
     } else {
-        return v8::Undefined();
+        v8::Handle<v8::Array> arr(v8::Array::New());
+
+        const apr_array_header_t *header = apr_table_elts(r->headers_in);
+        apr_table_entry_t *elts = (apr_table_entry_t *)header->elts;
+
+        for (int i = 0; i < header->nelts; i++) {
+            arr->Set(i, v8::String::New(elts[i].key));
+        }
+
+        return arr;
     }
+
+    return v8::Undefined();
 }
 
 static v8::Handle<v8::Value> v8_params(const v8::Arguments& args)
@@ -422,13 +432,22 @@ static int v8_handler(request_rec *r)
                       v8::String::New(r->uri));
             robj->Set(v8::String::New("filename"),
                       v8::String::New(r->filename));
-            global->Set ("request", robj);
+            if (r->connection->remote_ip) {
+                robj->Set(v8::String::New("remote_ip"),
+                          v8::String::New(r->connection->remote_ip));
+            } else {
+                robj->Set(v8::String::New("remote_ip"), v8::Undefined());
+            }
+
+            global->Set (v8::String::New("request"), robj);
 
             //Header function.
-            global->Set("header", v8::FunctionTemplate::New(v8_header));
+            global->Set(v8::String::New("header"),
+                        v8::FunctionTemplate::New(v8_header));
 
             //Parameter function.
-            global->Set("params", v8::FunctionTemplate::New(v8_params));
+            global->Set(v8::String::New("params"),
+                        v8::FunctionTemplate::New(v8_params));
 
             //Create a new context.
             v8::Persistent<v8::Context> context = v8::Context::New();

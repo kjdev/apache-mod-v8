@@ -52,10 +52,17 @@ test.v8:
     ap.rputs("Method = " + ap.request.method + "\n");
     ap.rputs("Uri = " + ap.request.uri + "\n");
     ap.rputs("Filename = " + ap.request.filename + "\n");
+    ap.rputs("Remote IP = " + ap.request.remote_ip + "\n");
 
     //request header: ap.header(#val#)
     ap.rputs("Header: Host = " + ap.header("Host") + "\n");
     ap.rputs("Header: User-Agent = " + ap.header("User-Agent") + "\n");
+
+    //request header keys: ap.header()
+    var headers = ap.header();
+    for (var i = 0; i < headers.length; i ++) {
+        ap.rputs(headers[i] + " => " + ap.header(headers[i]) + "\n");
+    }
 
     //request params: ap.params(#val#)
     ap.rputs("Params: test = " + ap.params("test") + "\n");

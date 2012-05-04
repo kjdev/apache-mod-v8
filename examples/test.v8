@@ -11,18 +11,26 @@ ap.rputs("Hello, World" + "\n");
 var method = ap.request.method;
 var uri = ap.request.uri;
 var filename = ap.request.filename;
+var ip = ap.request.remote_ip;
 
 ap.rputs("Method = " + method + "\n");
 ap.rputs("Uri = " + uri + "\n");
 ap.rputs("Filename = " + filename + "\n");
+ap.rputs("Remote IP = " + ip + "\n");
 
 //request header
 //ap.header(#val#)
+//ap.header() : header keys [array]
 var host = ap.header("Host");
 var user_agent = ap.header("User-Agent");
 
 ap.rputs("Header: Host = " + host + "\n");
 ap.rputs("Header: User-Agent = " + user_agent + "\n");
+
+var headers = ap.header();
+for (var i = 0; i < headers.length; i ++) {
+    ap.rputs(headers[i] + " => " + ap.header(headers[i]) + "\n");
+}
 
 //request params
 //ap.params(#val#)
