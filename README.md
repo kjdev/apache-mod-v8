@@ -69,3 +69,7 @@ test.v8:
     //content-type: ap.content_type(#val#)
     //default: text/plain; charset=UTF-8
     ap.content_type("text/html; charset=UTF-8");
+
+    //json: ap.toJson(#val#)
+    var obj = { test: "TEST", hoge:"HOGE" };
+    ap.rputs(ap.toJson(obj) + "\n");

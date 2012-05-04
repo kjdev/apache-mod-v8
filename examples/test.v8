@@ -47,3 +47,8 @@ ap.rputs(sud_data + "\n");
 
 //content-type
 //ap.content_type("text/html; charset=UTF-8");
+
+//json
+var obj = { test: "TEST", hoge:"HOGE" };
+ap.rputs(obj + "\n");
+ap.rputs(ap.toJson(obj) + "\n");

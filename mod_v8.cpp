@@ -210,9 +210,9 @@ static v8::Handle<v8::Value> v8_dirname(const v8::Arguments& args)
 
     v8::HandleScope scope;
     v8::Handle<v8::Value> arg = args[0];
-    v8::Local<v8::Object> self = args.Holder();
-    v8::Local<v8::External> wrap
-        = v8::Local<v8::External>::Cast(self->GetInternalField(0));
+    //v8::Local<v8::Object> self = args.Holder();
+    //v8::Local<v8::External> wrap
+    //    = v8::Local<v8::External>::Cast(self->GetInternalField(0));
     v8::String::Utf8Value value(arg);
 
     if (value.length() == 0) {
@@ -289,19 +289,12 @@ static v8::Handle<v8::Value> v8_require(const v8::Arguments& args)
 
     apr_file_close(fp);
 
-    {
-        //Read javascript source
-        v8::Handle<v8::String> source = v8::String::New((char *)src, fi.size);
-        v8::TryCatch try_catch;
+    v8::Handle<v8::String> source = v8::String::New((char *)src, fi.size);
+    v8::TryCatch try_catch;
 
-        //Compile the source code.
-        v8::Handle<v8::Script> script = v8::Script::Compile(source);
+    v8::Handle<v8::Script> script = v8::Script::Compile(source);
 
-        //Run the script to return.
-        return script->Run();
-    }
-
-    return v8::Undefined();
+    return script->Run();
 }
 
 static v8::Handle<v8::Value> v8_header(const v8::Arguments& args)
@@ -355,6 +348,28 @@ static v8::Handle<v8::Value> v8_params(const v8::Arguments& args)
     }
 }
 
+static v8::Handle<v8::Value> v8_json(const v8::Arguments& args)
+{
+    if (args.Length() < 1) {
+        return v8::Undefined();
+    }
+
+    v8::HandleScope scope;
+    v8::Handle<v8::Value> arg = args[0];
+    //v8::Local<v8::Object> self = args.Holder();
+    //v8::Local<v8::External> wrap
+    //    = v8::Local<v8::External>::Cast(self->GetInternalField(1));
+
+    v8::Local<v8::Context> context = v8::Context::GetCurrent();
+    v8::Local<v8::Object> global = context->Global();
+    v8::Local<v8::Object> json =
+        global->Get(v8::String::New("JSON"))->ToObject();
+    v8::Local<v8::Function> json_stringify =
+        v8::Local<v8::Function>::Cast(json->Get(v8::String::New("stringify")));
+
+    return scope.Close(json_stringify->Call(json, 1, &arg));
+}
+
 /* content handler */
 static int v8_handler(request_rec *r)
 {
@@ -396,6 +411,8 @@ static int v8_handler(request_rec *r)
                         v8::FunctionTemplate::New(v8_dirname));
             global->Set(v8::String::New("require"),
                         v8::FunctionTemplate::New(v8_require));
+            global->Set(v8::String::New("toJson"),
+                        v8::FunctionTemplate::New(v8_json));
 
             //Request Objects.
             v8::Handle<v8::ObjectTemplate> robj = v8::ObjectTemplate::New();
