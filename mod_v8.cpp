@@ -174,7 +174,7 @@ static v8::Handle<v8::Value> v8_rputs(const v8::Arguments& args)
 
     ap_rputs(*value, r);
 
-    return v8::Undefined();
+    return scope.Close(v8::Undefined());
 }
 
 static v8::Handle<v8::Value> v8_set_content_type(const v8::Arguments& args)
@@ -199,7 +199,7 @@ static v8::Handle<v8::Value> v8_set_content_type(const v8::Arguments& args)
         }
     }
 
-    return v8::Undefined();
+    return scope.Close(v8::Undefined());
 }
 
 static v8::Handle<v8::Value> v8_dirname(const v8::Arguments& args)
@@ -229,12 +229,12 @@ static v8::Handle<v8::Value> v8_dirname(const v8::Arguments& args)
     s = strrchr(*value, '/');
     if (s != NULL) {
         if (s == *value) {
-            return v8::String::New("/");
+            return scope.Close(v8::String::New("/"));
         }
         *s = '\0';
     }
 
-    return v8::String::New(*value);
+    return scope.Close(v8::String::New(*value));
 }
 
 static v8::Handle<v8::Value> v8_require(const v8::Arguments& args)
@@ -263,28 +263,28 @@ static v8::Handle<v8::Value> v8_require(const v8::Arguments& args)
                        r->pool);
     if (rv != APR_SUCCESS) {
         _RERR(r, "v8: file open: %s", *value);
-        return v8::Undefined();
+        return scope.Close(v8::Undefined());
     }
 
     rv = apr_file_info_get(&fi, APR_FINFO_SIZE, fp);
     if (rv != APR_SUCCESS || fi.size <= 0) {
         _RERR(r, "v8: file info: %s", *value);
         apr_file_close(fp);
-        return v8::Undefined();
+        return scope.Close(v8::Undefined());
     }
 
     src = apr_palloc(r->pool, fi.size);
     if (!src) {
         _RERR(r, "v8: apr_palloc");
         apr_file_close(fp);
-        return v8::Undefined();
+        return scope.Close(v8::Undefined());
     }
 
     rv = apr_file_read_full(fp, src, fi.size, &bytes);
     if (rv != APR_SUCCESS || bytes != fi.size) {
         _RERR(r, "v8: file read: %s", *value);
         apr_file_close(fp);
-        return v8::Undefined();
+        return scope.Close(v8::Undefined());
     }
 
     apr_file_close(fp);
@@ -294,7 +294,7 @@ static v8::Handle<v8::Value> v8_require(const v8::Arguments& args)
 
     v8::Handle<v8::Script> script = v8::Script::Compile(source);
 
-    return script->Run();
+    return scope.Close(script->Run());
 }
 
 static v8::Handle<v8::Value> v8_header(const v8::Arguments& args)
@@ -313,7 +313,7 @@ static v8::Handle<v8::Value> v8_header(const v8::Arguments& args)
         const char *header = apr_table_get(r->headers_in, *value);
 
         if (header) {
-            return v8::String::New(header);
+            return scope.Close(v8::String::New(header));
         }
     } else {
         v8::Handle<v8::Array> arr(v8::Array::New());
@@ -325,10 +325,10 @@ static v8::Handle<v8::Value> v8_header(const v8::Arguments& args)
             arr->Set(i, v8::String::New(elts[i].key));
         }
 
-        return arr;
+        return scope.Close(arr);
     }
 
-    return v8::Undefined();
+    return scope.Close(v8::Undefined());
 }
 
 static v8::Handle<v8::Value> v8_params(const v8::Arguments& args)
@@ -352,9 +352,9 @@ static v8::Handle<v8::Value> v8_params(const v8::Arguments& args)
     const char *param = apr_table_get(tbl, *value);
 
     if (param) {
-        return v8::String::New(param);
+        return scope.Close(v8::String::New(param));
     } else {
-        return v8::Undefined();
+        return scope.Close(v8::Undefined());
     }
 }
 
