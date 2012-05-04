@@ -154,7 +154,7 @@ static v8::Handle<v8::Value> v8_log(const v8::Arguments& args)
 
     _RERR(r, "v8::log: %s", *value);
 
-    return v8::Undefined();
+    return scope.Close(v8::Undefined());
 }
 
 static v8::Handle<v8::Value> v8_rputs(const v8::Arguments& args)
