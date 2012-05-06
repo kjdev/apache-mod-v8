@@ -91,10 +91,8 @@ module AP_MODULE_DECLARE_DATA v8_module =
 }
 #endif
 
-static apr_status_t v8_read_file(const char *path,
-                                 const char **out,
-                                 apr_size_t *outlen,
-                                 apr_pool_t *p,
+static apr_status_t v8_read_file(const char *path, const char **out,
+                                 apr_size_t *outlen, apr_pool_t *p,
                                  apr_pool_t *ptemp)
 {
     char *c;
@@ -144,11 +142,10 @@ static v8::Handle<v8::Value> v8_log(const v8::Arguments& args)
     }
 
     v8::HandleScope scope;
-    v8::Handle<v8::Value> arg = args[0];
     v8::Local<v8::Object> self = args.Holder();
     v8::Local<v8::External> wrap =
         v8::Local<v8::External>::Cast(self->GetInternalField(0));
-    v8::String::Utf8Value value(arg);
+    v8::String::Utf8Value value(args[0]->ToString());
 
     request_rec *r = static_cast<request_rec*>(wrap->Value());
 
@@ -164,11 +161,10 @@ static v8::Handle<v8::Value> v8_rputs(const v8::Arguments& args)
     }
 
     v8::HandleScope scope;
-    v8::Handle<v8::Value> arg = args[0];
     v8::Local<v8::Object> self = args.Holder();
     v8::Local<v8::External> wrap
         = v8::Local<v8::External>::Cast(self->GetInternalField(0));
-    v8::String::Utf8Value value(arg);
+    v8::String::Utf8Value value(args[0]->ToString());
 
     request_rec *r = static_cast<request_rec*>(wrap->Value());
 
@@ -184,11 +180,10 @@ static v8::Handle<v8::Value> v8_set_content_type(const v8::Arguments& args)
     }
 
     v8::HandleScope scope;
-    v8::Handle<v8::Value> arg = args[0];
     v8::Local<v8::Object> self = args.Holder();
     v8::Local<v8::External> wrap
         = v8::Local<v8::External>::Cast(self->GetInternalField(0));
-    v8::String::Utf8Value value(arg);
+    v8::String::Utf8Value value(args[0]->ToString());
 
     request_rec *r = static_cast<request_rec*>(wrap->Value());
 
@@ -209,11 +204,7 @@ static v8::Handle<v8::Value> v8_dirname(const v8::Arguments& args)
     }
 
     v8::HandleScope scope;
-    v8::Handle<v8::Value> arg = args[0];
-    //v8::Local<v8::Object> self = args.Holder();
-    //v8::Local<v8::External> wrap
-    //    = v8::Local<v8::External>::Cast(self->GetInternalField(0));
-    v8::String::Utf8Value value(arg);
+    v8::String::Utf8Value value(args[0]->ToString());
 
     if (value.length() == 0) {
         return v8::Undefined();
@@ -244,11 +235,10 @@ static v8::Handle<v8::Value> v8_require(const v8::Arguments& args)
     }
 
     v8::HandleScope scope;
-    v8::Handle<v8::Value> arg = args[0];
     v8::Local<v8::Object> self = args.Holder();
     v8::Local<v8::External> wrap
         = v8::Local<v8::External>::Cast(self->GetInternalField(0));
-    v8::String::Utf8Value value(arg);
+    v8::String::Utf8Value value(args[0]->ToString());
 
     request_rec *r = static_cast<request_rec*>(wrap->Value());
 
@@ -307,8 +297,7 @@ static v8::Handle<v8::Value> v8_header(const v8::Arguments& args)
     request_rec *r = static_cast<request_rec*>(wrap->Value());
 
     if (args.Length() >= 1) {
-        v8::Handle<v8::Value> arg = args[0];
-        v8::String::Utf8Value value(arg);
+        v8::String::Utf8Value value(args[0]->ToString());
 
         const char *header = apr_table_get(r->headers_in, *value);
 
@@ -338,24 +327,36 @@ static v8::Handle<v8::Value> v8_params(const v8::Arguments& args)
     }
 
     v8::HandleScope scope;
-    v8::Handle<v8::Value> arg = args[0];
     v8::Local<v8::Object> self = args.Holder();
     v8::Local<v8::External> wrap
         = v8::Local<v8::External>::Cast(self->GetInternalField(1));
-    v8::String::Utf8Value value(arg);
+    v8::String::Utf8Value value(args[0]->ToString());
 
     apr_table_t *tbl = static_cast<apr_table_t*>(wrap->Value());
     if (!tbl) {
         return v8::Undefined();
     }
 
-    const char *param = apr_table_get(tbl, *value);
+    if (args.Length() >= 1) {
+        const char *param = apr_table_get(tbl, *value);
 
-    if (param) {
-        return scope.Close(v8::String::New(param));
+        if (param) {
+            return scope.Close(v8::String::New(param));
+        }
     } else {
-        return scope.Close(v8::Undefined());
+        v8::Handle<v8::Array> arr(v8::Array::New());
+
+        const apr_array_header_t *arr_tbl = apr_table_elts(tbl);
+        apr_table_entry_t *elts = (apr_table_entry_t *)arr_tbl->elts;
+
+        for (int i = 0; i < arr_tbl->nelts; i++) {
+            arr->Set(i, v8::String::New(elts[i].key));
+        }
+
+        return scope.Close(arr);
     }
+
+    return scope.Close(v8::Undefined());
 }
 
 static v8::Handle<v8::Value> v8_json(const v8::Arguments& args)
@@ -366,10 +367,6 @@ static v8::Handle<v8::Value> v8_json(const v8::Arguments& args)
 
     v8::HandleScope scope;
     v8::Handle<v8::Value> arg = args[0];
-    //v8::Local<v8::Object> self = args.Holder();
-    //v8::Local<v8::External> wrap
-    //    = v8::Local<v8::External>::Cast(self->GetInternalField(1));
-
     v8::Local<v8::Context> context = v8::Context::GetCurrent();
     v8::Local<v8::Object> global = context->Global();
     v8::Local<v8::Object> json =

@@ -51,7 +51,7 @@ ap.rputs(dir + "\n");
 ap.require(dir + '/sub.v8');
 
 sub_function();
-ap.rputs(sud_data + "\n");
+ap.rputs(sub_data + "\n");
 
 //content-type
 //ap.content_type("text/html; charset=UTF-8");
