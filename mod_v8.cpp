@@ -15,6 +15,9 @@
 /* v8 */
 #include "v8.h"
 
+/* std */
+#include <iostream>
+
 /* httpd */
 #ifdef __cplusplus
 extern "C" {
@@ -132,6 +135,51 @@ static apr_status_t v8_read_file(const char *path, const char **out,
     *outlen = len;
 
     return APR_SUCCESS;
+}
+
+static v8::Handle<v8::Value> v8_objectTojson(v8::Handle<v8::Value> obj)
+{
+    v8::Local<v8::Context> context = v8::Context::GetCurrent();
+    v8::Local<v8::Object> global = context->Global();
+    v8::Local<v8::Object> json =
+        global->Get(v8::String::New("JSON"))->ToObject();
+    v8::Local<v8::Function> json_stringify =
+        v8::Local<v8::Function>::Cast(json->Get(v8::String::New("stringify")));
+
+    return json_stringify->Call(json, 1, &obj);
+}
+
+static v8::Handle<v8::Value> v8_jsonToobject(v8::Handle<v8::Value> str)
+{
+    v8::Handle<v8::Context> context = v8::Context::GetCurrent();
+    v8::Handle<v8::Object> global = context->Global();
+    v8::Handle<v8::Object> json =
+        global->Get(v8::String::New("JSON"))->ToObject();
+    v8::Handle<v8::Function> json_parse =
+        v8::Handle<v8::Function>::Cast(json->Get(v8::String::New("parse")));
+
+    v8::String::Utf8Value value(str->ToString());
+
+    std::string buf;
+    int pos = 0, len = value.length();
+    char *val = *value;
+    char s;
+
+    //escape quote
+    buf += '"';
+    while (pos < len) {
+        s = val[pos++];
+        if (s == '"') {
+            buf += "\\\"";
+        } else {
+            buf += s;
+        }
+    }
+    buf += '"';
+
+    v8::Handle<v8::Value> arg = v8::String::New(buf.c_str());
+
+    return json_parse->Call(json, 1, &arg);
 }
 
 /* V8 callback function */
@@ -359,22 +407,28 @@ static v8::Handle<v8::Value> v8_params(const v8::Arguments& args)
     return scope.Close(v8::Undefined());
 }
 
-static v8::Handle<v8::Value> v8_json(const v8::Arguments& args)
+static v8::Handle<v8::Value> v8_toJson(const v8::Arguments& args)
 {
-    if (args.Length() < 1) {
+    if (args.Length() < 1 || !args[0]->IsObject()) {
         return v8::Undefined();
     }
 
     v8::HandleScope scope;
     v8::Handle<v8::Value> arg = args[0];
-    v8::Local<v8::Context> context = v8::Context::GetCurrent();
-    v8::Local<v8::Object> global = context->Global();
-    v8::Local<v8::Object> json =
-        global->Get(v8::String::New("JSON"))->ToObject();
-    v8::Local<v8::Function> json_stringify =
-        v8::Local<v8::Function>::Cast(json->Get(v8::String::New("stringify")));
 
-    return scope.Close(json_stringify->Call(json, 1, &arg));
+    return scope.Close(v8_objectTojson(arg));
+}
+
+static v8::Handle<v8::Value> v8_fromJson(const v8::Arguments& args)
+{
+    if (args.Length() < 1 || !args[0]->IsString()) {
+        return v8::Undefined();
+    }
+
+    v8::HandleScope scope;
+    v8::Handle<v8::Value> arg = args[0];
+
+    return scope.Close(v8_jsonToobject(arg));
 }
 
 /* content handler */
@@ -419,7 +473,9 @@ static int v8_handler(request_rec *r)
             global->Set(v8::String::New("require"),
                         v8::FunctionTemplate::New(v8_require));
             global->Set(v8::String::New("toJson"),
-                        v8::FunctionTemplate::New(v8_json));
+                        v8::FunctionTemplate::New(v8_toJson));
+            global->Set(v8::String::New("fromJson"),
+                        v8::FunctionTemplate::New(v8_fromJson));
 
             //Request Objects.
             v8::Handle<v8::ObjectTemplate> robj = v8::ObjectTemplate::New();
