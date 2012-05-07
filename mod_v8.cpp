@@ -158,28 +158,7 @@ static v8::Handle<v8::Value> v8_jsonToobject(v8::Handle<v8::Value> str)
     v8::Handle<v8::Function> json_parse =
         v8::Handle<v8::Function>::Cast(json->Get(v8::String::New("parse")));
 
-    v8::String::Utf8Value value(str->ToString());
-
-    std::string buf;
-    int pos = 0, len = value.length();
-    char *val = *value;
-    char s;
-
-    //escape quote
-    buf += '"';
-    while (pos < len) {
-        s = val[pos++];
-        if (s == '"') {
-            buf += "\\\"";
-        } else {
-            buf += s;
-        }
-    }
-    buf += '"';
-
-    v8::Handle<v8::Value> arg = v8::String::New(buf.c_str());
-
-    return json_parse->Call(json, 1, &arg);
+    return json_parse->Call(json, 1, &str);
 }
 
 /* V8 callback function */
@@ -331,8 +310,15 @@ static v8::Handle<v8::Value> v8_require(const v8::Arguments& args)
     v8::TryCatch try_catch;
 
     v8::Handle<v8::Script> script = v8::Script::Compile(source);
+    v8::Handle<v8::Value> result = script->Run();
 
-    return scope.Close(script->Run());
+    if (result.IsEmpty()) {
+        v8::String::Utf8Value error(try_catch.Exception());
+        _RERR(r, "v8: toJson(%s) Failed: %s", r->filename, *error);
+        return scope.Close(v8::Undefined());
+    } else {
+        return scope.Close(result);
+    }
 }
 
 static v8::Handle<v8::Value> v8_header(const v8::Arguments& args)
@@ -416,7 +402,23 @@ static v8::Handle<v8::Value> v8_toJson(const v8::Arguments& args)
     v8::HandleScope scope;
     v8::Handle<v8::Value> arg = args[0];
 
-    return scope.Close(v8_objectTojson(arg));
+    v8::TryCatch try_catch;
+    v8::Handle<v8::Value> result = v8_objectTojson(arg);
+
+    if (result.IsEmpty()) {
+        v8::Local<v8::Object> self = args.Holder();
+        v8::Local<v8::External> wrap =
+            v8::Local<v8::External>::Cast(self->GetInternalField(0));
+
+        request_rec *r = static_cast<request_rec*>(wrap->Value());
+
+        v8::String::Utf8Value error(try_catch.Exception());
+
+        _RERR(r, "v8: toJson(%s) Failed: %s", r->filename, *error);
+        return scope.Close(v8::Undefined());
+    } else {
+        return scope.Close(result);
+    }
 }
 
 static v8::Handle<v8::Value> v8_fromJson(const v8::Arguments& args)
@@ -428,7 +430,23 @@ static v8::Handle<v8::Value> v8_fromJson(const v8::Arguments& args)
     v8::HandleScope scope;
     v8::Handle<v8::Value> arg = args[0];
 
-    return scope.Close(v8_jsonToobject(arg));
+    v8::TryCatch try_catch;
+    v8::Handle<v8::Value> result = v8_jsonToobject(arg);
+
+    if (result.IsEmpty()) {
+        v8::Local<v8::Object> self = args.Holder();
+        v8::Local<v8::External> wrap =
+            v8::Local<v8::External>::Cast(self->GetInternalField(0));
+
+        request_rec *r = static_cast<request_rec*>(wrap->Value());
+
+        v8::String::Utf8Value error(try_catch.Exception());
+
+        _RERR(r, "v8: fromJson(%s) Failed: %s", r->filename, *error);
+        return scope.Close(v8::Undefined());
+    } else {
+        return scope.Close(result);
+    }
 }
 
 /* content handler */
@@ -533,7 +551,7 @@ static int v8_handler(request_rec *r)
                 v8::Handle<v8::Value> result = script->Run();
 
                 if (result.IsEmpty()) {
-                    v8::String::AsciiValue error(try_catch.Exception());
+                    v8::String::Utf8Value error(try_catch.Exception());
                     _RERR(r, "v8: Script(%s) Failed: %s", r->filename, *error);
                     retval = HTTP_INTERNAL_SERVER_ERROR;
                 }
