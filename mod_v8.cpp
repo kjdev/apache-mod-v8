@@ -314,7 +314,7 @@ static v8::Handle<v8::Value> v8_require(const v8::Arguments& args)
 
     if (result.IsEmpty()) {
         v8::String::Utf8Value error(try_catch.Exception());
-        _RERR(r, "v8: toJson(%s) Failed: %s", r->filename, *error);
+        _RERR(r, "v8: require(%s) Failed: %s", r->filename, *error);
         return scope.Close(v8::Undefined());
     } else {
         return scope.Close(result);
