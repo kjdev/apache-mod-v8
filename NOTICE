@@ -1,0 +1,11 @@
+
+v8:
+javascript engine is provided by the Javascript V8 Engine,
+which is open source software, copyright by Google Inc.
+The original software is available from
+  http://code.google.com/p/v8/
+
+
+libapreq2:
+This product includes software developed by
+The Apache Software Foundation (http://www.apache.org/).
