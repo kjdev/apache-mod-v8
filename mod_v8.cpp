@@ -42,13 +42,13 @@ extern "C" {
 
 #define _RERR(r, format, args...)                                   \
     ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0,                        \
-                  r, "%s(%d) "format, __FILE__, __LINE__, ##args);
+                  r, "[V8] %s(%d) "format, __FILE__, __LINE__, ##args);
 #define _SERR(s, format, args...)                                  \
     ap_log_error(APLOG_MARK, APLOG_CRIT, 0,                        \
-                 s, "%s(%d) "format, __FILE__, __LINE__, ##args);
+                 s, "[V8] %s(%d) "format, __FILE__, __LINE__, ##args);
 #define _PERR(p, format, args...)                                   \
     ap_log_perror(APLOG_MARK, APLOG_CRIT, 0,                        \
-                  p, "%s(%d) "format, __FILE__, __LINE__, ##args);
+                  p, "[V8] %s(%d) "format, __FILE__, __LINE__, ##args);
 #define _RDEBUG(r, format, args...)                                     \
     ap_log_rerror(APLOG_MARK, V8_DEBUG_LOG_LEVEL, 0,                    \
                   r, "[V8_DEBUG] %s(%d) "format, __FILE__, __LINE__, ##args);
@@ -61,8 +61,10 @@ extern "C" {
 
 /* v8 server config */
 typedef struct {
-    v8::Isolate *isolate;
     V8::js *js;
+#ifdef AP_USE_V8_ISOLATE
+    v8::Isolate *isolate;
+#endif
 } v8_server_config_t;
 
 /* Functions */
@@ -118,13 +120,13 @@ static apr_status_t v8_read_file(const char *path, const char **out,
     rv = apr_file_open(&fp, path, APR_READ|APR_BINARY|APR_BUFFERED,
                        APR_OS_DEFAULT, ptemp);
     if (rv != APR_SUCCESS) {
-        _PERR(p, "v8: file open: %s", path);
+        _PERR(p, "file open: %s", path);
         return rv;
     }
 
     rv = apr_file_info_get(&fi, APR_FINFO_SIZE, fp);
     if (rv != APR_SUCCESS) {
-        _PERR(p, "v8: file info get: %s", path);
+        _PERR(p, "file info get: %s", path);
         return rv;
     }
 
@@ -135,7 +137,7 @@ static apr_status_t v8_read_file(const char *path, const char **out,
 
     rv = apr_brigade_pflatten(bb, &c, &len, p);
     if (rv) {
-        _PERR(p, "v8: apr_brigade_pflatten: %s", path);
+        _PERR(p, "apr_brigade_pflatten: %s", path);
         return rv;
     }
 
@@ -149,6 +151,10 @@ static apr_status_t v8_read_file(const char *path, const char **out,
 static apr_status_t v8_js_cleanup(void *parms)
 {
     v8_server_config_t *config = (v8_server_config_t *)parms;
+
+    if (!config) {
+        return APR_SUCCESS;
+    }
 
     if (config->js) {
         delete config->js;
@@ -185,7 +191,7 @@ static void v8_child_init(apr_pool_t *p, server_rec *s)
     config->isolate = v8::Isolate::New();
     config->isolate->Enter();
     config->isolate = v8::Isolate::GetCurrent();
-    _PDEBUG(p, "isolate: enabled");
+    _SDEBUG(s, "isolate: enabled");
 #endif
 
     config->js = new V8::js();
@@ -202,6 +208,7 @@ static int v8_handler(request_rec *r)
         return DECLINED;
     }
 
+    /* server config */
     v8_server_config_t *config =
         (v8_server_config_t *)ap_get_module_config(r->server->module_config,
                                                    &v8_module);
@@ -214,7 +221,7 @@ static int v8_handler(request_rec *r)
         apreq_handle_t *apreq = apreq_handle_apache2(r);
         apr_table_t *params = apreq_params(apreq, r->pool);
 
-        //Set ap internal fields.
+        //Set V8::js ap internal fields.
         config->js->ap->SetInternalField(0, v8::External::New(r));
         config->js->ap->SetInternalField(1, v8::External::New(params));
 
@@ -238,11 +245,11 @@ static int v8_handler(request_rec *r)
             v8::Handle<v8::Value> result = script->Run();
             if (result.IsEmpty()) {
                 v8::String::Utf8Value error(try_catch.Exception());
-                _RERR(r, "v8: Script(%s) Failed: %s", r->filename, *error);
+                _RERR(r, "Script(%s) Failed: %s", r->filename, *error);
                 retval = HTTP_INTERNAL_SERVER_ERROR;
             }
         } else {
-            _RERR(r, "v8: Failed to read: %s", r->filename);
+            _RERR(r, "Failed to read: %s", r->filename);
             retval = HTTP_INTERNAL_SERVER_ERROR;
         }
         apr_pool_clear(ptemp);

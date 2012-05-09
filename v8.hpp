@@ -73,7 +73,7 @@ static v8::Handle<v8::Value> v8_log(const v8::Arguments& args)
 
     v8::String::Utf8Value value(args[0]->ToString());
 
-    ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "v8::log: %s", *value);
+    ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r, "%s", *value);
 
     return scope.Close(v8::Undefined());
 }
