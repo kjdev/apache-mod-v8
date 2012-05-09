@@ -4,14 +4,18 @@ ap.log("hi there");
 
 //output
 //ap.rputs(#val#)
+ap.rputs("----- Output -----\n");
+
 ap.rputs("Hello, World" + "\n");
 
-//request parameter (method/uri/filename)
-//ap.request.#val#
-var method = ap.request.method;
-var uri = ap.request.uri;
-var filename = ap.request.filename;
-var ip = ap.request.remote_ip;
+//request parameter
+//ap.request(#val#)
+ap.rputs("----- Request -----\n");
+
+var method = ap.request("method");
+var uri = ap.request("uri");
+var filename = ap.request("filename");
+var ip = ap.request("remote_ip");
 
 ap.rputs("Method = " + method + "\n");
 ap.rputs("Uri = " + uri + "\n");
@@ -21,6 +25,8 @@ ap.rputs("Remote IP = " + ip + "\n");
 //request header
 //ap.header(#val#)
 //ap.header() : header keys [array]
+ap.rputs("----- Header -----\n");
+
 var host = ap.header("Host");
 var user_agent = ap.header("User-Agent");
 
@@ -34,6 +40,8 @@ for (var i = 0; i < headers.length; i ++) {
 
 //request params
 //ap.params(#val#)
+ap.rputs("----- Parameter -----\n");
+
 var hoge = ap.params("hoge");
 var test = ap.params("test");
 
@@ -42,21 +50,33 @@ ap.rputs("Params: test = " + test + "\n");
 
 //dirname
 //ap.dirname(#val#)
-var dir = ap.dirname(filename);
 
+ap.rputs("----- Directory name -----\n");
+
+var dir = ap.dirname(filename);
 ap.rputs(dir + "\n");
 
 //require
 //ap.require(#val#)
+ap.rputs("----- Require -----\n");
+
 ap.require(dir + '/sub.v8');
 
 sub_function();
 ap.rputs(sub_data + "\n");
 
 //content-type
+//ap.rputs("----- Content-Type -----\n");
+
 //ap.content_type("text/html; charset=UTF-8");
 
 //json
+ap.rputs("----- Json -----\n");
 var obj = { test: "TEST", hoge:"HOGE" };
 ap.rputs(obj + "\n");
 ap.rputs(ap.toJson(obj) + "\n");
+
+var str = '{ "a": "A", "b":"B" }';
+ap.rputs(str + "\n");
+ap.rputs(ap.fromJson(str) + "\n");
+ap.rputs(ap.toJson(ap.fromJson(str)) + "\n");

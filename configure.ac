@@ -1,13 +1,13 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT(mod_v8, 0.0.1)
+AC_INIT(mod_v8, 0.0.2)
 
 AC_CONFIG_SRCDIR([mod_v8.cpp])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 
-AM_INIT_AUTOMAKE(mod_v8, 0.0. 1, [NO-DEFINE])
+AM_INIT_AUTOMAKE(mod_v8, 0.0.2, [NO-DEFINE])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 
 # Checks for programs.
