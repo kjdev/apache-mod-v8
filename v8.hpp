@@ -355,12 +355,18 @@ namespace V8 {
 class js
 {
 public:
-    v8::Handle<v8::Object> ap;
-
     js() {
-        global_ = v8::ObjectTemplate::New();
-        context_ = v8::Context::New(NULL, global_);
-        context_->Enter();
+        if (!v8::Context::InContext()) {
+            context_enter_ = true;
+            global_context_ = v8::Context::New();
+            global_context_->Enter();
+            context_ = v8::Local<v8::Context>::New(global_context_);
+        } else {
+            context_enter_ = false;
+            context_ = v8::Context::GetCurrent();
+        }
+
+        v8::Context::Scope scope(context_);
 
         //ap(apache) object template.
         v8::Handle<v8::ObjectTemplate> ap_tmpl = v8::ObjectTemplate::New();
@@ -393,20 +399,55 @@ public:
                      v8::FunctionTemplate::New(v8_params));
 
         //object instance.
-        ap = ap_tmpl->NewInstance();
-        context_->Global()->Set(v8::String::New("ap"), ap);
+        ap_ = ap_tmpl->NewInstance();
+        context_->Global()->Set(v8::String::New("ap"), ap_);
     }
 
     ~js() {
-        context_->DetachGlobal();
-        context_->Exit();
-        context_.Dispose();
+        if (context_enter_) {
+            global_context_->DetachGlobal();
+            global_context_->Exit();
+            global_context_.Dispose();
+        }
+    }
+
+    bool run(const char *src, apr_size_t len,
+             request_rec *r, apr_table_t *params) {
+        v8::TryCatch try_catch;
+
+        ap_->SetInternalField(0, v8::External::New(r));
+        ap_->SetInternalField(1, v8::External::New(params));
+
+        v8::Handle<v8::String> source = v8::String::New(src, len);
+
+        //Compile the source code.
+        v8::Handle<v8::Script> script = v8::Script::Compile(source);
+        if (script.IsEmpty()) {
+            v8::String::Utf8Value error(try_catch.Exception());
+            _V8_RERR(r, "Script(%s) Failed: %s", r->filename, *error);
+            return false;
+        }
+
+        //Run the script to get the result.
+        v8::Handle<v8::Value> result = script->Run();
+        if (result.IsEmpty()) {
+            v8::String::Utf8Value error(try_catch.Exception());
+            _V8_RERR(r, "Script(%s) Failed: %s", r->filename, *error);
+            return false;
+        }
+
+        return true;
     }
 
 private:
+    bool context_enter_;
+
     v8::HandleScope scope_;
-    v8::Handle<v8::ObjectTemplate> global_;
-    v8::Persistent<v8::Context> context_;
+    v8::Persistent<v8::Context> global_context_;
+
+    v8::Handle<v8::Object> ap_;
+    v8::Local<v8::Context> context_;
+
 };
 }
 

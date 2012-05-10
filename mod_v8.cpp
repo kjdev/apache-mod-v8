@@ -61,6 +61,7 @@ extern "C" {
 
 /* v8 server config */
 typedef struct {
+    apr_pool_t *pool;
     V8::js *js;
 #ifdef AP_USE_V8_ISOLATE
     v8::Isolate *isolate;
@@ -147,8 +148,8 @@ static apr_status_t v8_read_file(const char *path, const char **out,
     return APR_SUCCESS;
 }
 
-/* V8::js cleanup */
-static apr_status_t v8_js_cleanup(void *parms)
+/* cleanup */
+static apr_status_t v8_cleanup(void *parms)
 {
     v8_server_config_t *config = (v8_server_config_t *)parms;
 
@@ -158,6 +159,8 @@ static apr_status_t v8_js_cleanup(void *parms)
 
     if (config->js) {
         delete config->js;
+        config->js = NULL;
+        _PDEBUG(NULL, "Cleanup: V8 Engine");
     }
 
 #ifdef AP_USE_V8_ISOLATE
@@ -176,6 +179,8 @@ static void *v8_create_server_config(apr_pool_t *p, server_rec *s)
     v8_server_config_t *config =
         (v8_server_config_t *)apr_pcalloc(p, sizeof(v8_server_config_t));
 
+    apr_pool_create(&config->pool, p);
+
     config->js = NULL;
 
     return (void *)config;
@@ -187,16 +192,30 @@ static void v8_child_init(apr_pool_t *p, server_rec *s)
     v8_server_config_t *config =
         (v8_server_config_t *)ap_get_module_config(s->module_config, &v8_module);
 
+    apr_pool_cleanup_register(p, (void *)config, v8_cleanup,
+                              apr_pool_cleanup_null);
+}
+
+static apr_status_t v8_init(v8_server_config_t *config)
+{
+    if (!config->js) {
 #ifdef AP_USE_V8_ISOLATE
-    config->isolate = v8::Isolate::New();
-    config->isolate->Enter();
-    config->isolate = v8::Isolate::GetCurrent();
-    _SDEBUG(s, "isolate: enabled");
+        config->isolate = v8::Isolate::New();
+        config->isolate->Enter();
+        config->isolate = v8::Isolate::GetCurrent();
+        _PDEBUG(p, "isolate => enabled");
 #endif
 
-    config->js = new V8::js();
-    apr_pool_cleanup_register(p, (void *)config,
-                              v8_js_cleanup, apr_pool_cleanup_null);
+        config->js = new V8::js();
+
+        _PDEBUG(config->pool, "Context V8 Engine");
+    }
+
+    /* cleanup */
+    apr_pool_cleanup_register(config->pool, (void *)config, v8_cleanup,
+                              apr_pool_cleanup_null);
+
+    return APR_SUCCESS;
 }
 
 /* content handler */
@@ -217,13 +236,15 @@ static int v8_handler(request_rec *r)
     r->content_type = V8_CONTENT_TYPE;
 
     if (!r->header_only) {
+        /* init */
+        if (v8_init(config) != APR_SUCCESS) {
+            _RERR(r, "initilize faild.");
+            return HTTP_INTERNAL_SERVER_ERROR;
+        }
+
         //Request parameters.
         apreq_handle_t *apreq = apreq_handle_apache2(r);
         apr_table_t *params = apreq_params(apreq, r->pool);
-
-        //Set V8::js ap internal fields.
-        config->js->ap->SetInternalField(0, v8::External::New(r));
-        config->js->ap->SetInternalField(1, v8::External::New(params));
 
         //Create a string containing the JavaScript source code.
         const char *src;
@@ -235,17 +256,7 @@ static int v8_handler(request_rec *r)
         apr_pool_create(&ptemp, r->pool);
         if (v8_read_file(r->filename, &src, &len,
                          r->pool, ptemp) == APR_SUCCESS) {
-            v8::TryCatch try_catch;
-            v8::Handle<v8::String> source = v8::String::New(src, len);
-
-            //Compile the source code.
-            v8::Handle<v8::Script> script = v8::Script::Compile(source);
-
-            //Run the script to get the result.
-            v8::Handle<v8::Value> result = script->Run();
-            if (result.IsEmpty()) {
-                v8::String::Utf8Value error(try_catch.Exception());
-                _RERR(r, "Script(%s) Failed: %s", r->filename, *error);
+            if (!config->js->run(src, len, r, params)) {
                 retval = HTTP_INTERNAL_SERVER_ERROR;
             }
         } else {
