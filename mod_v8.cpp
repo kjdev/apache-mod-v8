@@ -32,32 +32,35 @@ extern "C" {
 }
 #endif
 
-#define V8_CONTENT_TYPE "text/plain; charset=UTF-8";
-
+/* log */
 #ifdef AP_V8_DEBUG_LOG_LEVEL
 #define V8_DEBUG_LOG_LEVEL AP_V8_DEBUG_LOG_LEVEL
 #else
 #define V8_DEBUG_LOG_LEVEL APLOG_DEBUG
 #endif
 
-#define _RERR(r, format, args...)                                   \
-    ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0,                        \
-                  r, "[V8] %s(%d) "format, __FILE__, __LINE__, ##args);
-#define _SERR(s, format, args...)                                  \
-    ap_log_error(APLOG_MARK, APLOG_CRIT, 0,                        \
-                 s, "[V8] %s(%d) "format, __FILE__, __LINE__, ##args);
-#define _PERR(p, format, args...)                                   \
-    ap_log_perror(APLOG_MARK, APLOG_CRIT, 0,                        \
-                  p, "[V8] %s(%d) "format, __FILE__, __LINE__, ##args);
+#define _RERR(r, format, args...)                                       \
+    ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0,                            \
+                  r, "[V8] %s(%d): "format, __FILE__, __LINE__, ##args)
+#define _SERR(s, format, args...)                                       \
+    ap_log_error(APLOG_MARK, APLOG_CRIT, 0,                             \
+                 s, "[V8] %s(%d): "format, __FILE__, __LINE__, ##args)
+#define _PERR(p, format, args...)                                       \
+    ap_log_perror(APLOG_MARK, APLOG_CRIT, 0,                            \
+                  p, "[V8] %s(%d): "format, __FILE__, __LINE__, ##args)
+
 #define _RDEBUG(r, format, args...)                                     \
     ap_log_rerror(APLOG_MARK, V8_DEBUG_LOG_LEVEL, 0,                    \
-                  r, "[V8_DEBUG] %s(%d) "format, __FILE__, __LINE__, ##args);
+                  r, "[V8_DEBUG] %s(%d): "format, __FILE__, __LINE__, ##args)
 #define _SDEBUG(s, format, args...)                                     \
     ap_log_error(APLOG_MARK, V8_DEBUG_LOG_LEVEL, 0,                     \
-                 s, "[V8_DEBUG] %s(%d) "format, __FILE__, __LINE__, ##args);
+                 s, "[V8_DEBUG] %s(%d): "format, __FILE__, __LINE__, ##args)
 #define _PDEBUG(p, format, args...)                                     \
     ap_log_perror(APLOG_MARK, V8_DEBUG_LOG_LEVEL, 0,                    \
-                  p, "[V8_DEBUG] %s(%d) "format, __FILE__, __LINE__, ##args);
+                  p, "[V8_DEBUG] %s(%d): "format, __FILE__, __LINE__, ##args)
+
+/* default parameter */
+#define V8_DEFAULT_CONTENT_TYPE "text/plain; charset=UTF-8";
 
 /* v8 server config */
 typedef struct {
@@ -233,7 +236,7 @@ static int v8_handler(request_rec *r)
                                                    &v8_module);
 
     /* content type */
-    r->content_type = V8_CONTENT_TYPE;
+    r->content_type = V8_DEFAULT_CONTENT_TYPE;
 
     if (!r->header_only) {
         /* init */

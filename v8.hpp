@@ -13,21 +13,42 @@ extern "C" {
 #include "httpd.h"
 #include "http_config.h"
 #include "http_protocol.h"
-//#include "http_main.h"
 #include "http_log.h"
-//#include "util_script.h"
 #include "ap_config.h"
 #include "apr_strings.h"
 #ifdef __cplusplus
 }
 #endif
 
-#define _V8_RERR(r, format, args...)                                    \
+/* log */
+#ifdef AP_V8_DEBUG_LOG_LEVEL
+#define V8_DEBUG_LOG_LEVEL AP_V8_DEBUG_LOG_LEVEL
+#else
+#define V8_DEBUG_LOG_LEVEL APLOG_DEBUG
+#endif
+
+#define _RERR(r, format, args...)                                       \
     ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0,                            \
-                  r, "[V8] %s(%d) "format, __FILE__, __LINE__, ##args);
+                  r, "[V8] %s(%d): "format, __FILE__, __LINE__, ##args)
+#define _SERR(s, format, args...)                                       \
+    ap_log_error(APLOG_MARK, APLOG_CRIT, 0,                             \
+                 s, "[V8] %s(%d): "format, __FILE__, __LINE__, ##args)
+#define _PERR(p, format, args...)                                       \
+    ap_log_perror(APLOG_MARK, APLOG_CRIT, 0,                            \
+                  p, "[V8] %s(%d): "format, __FILE__, __LINE__, ##args)
+
+#define _RDEBUG(r, format, args...)                                     \
+    ap_log_rerror(APLOG_MARK, V8_DEBUG_LOG_LEVEL, 0,                    \
+                  r, "[V8_DEBUG] %s(%d): "format, __FILE__, __LINE__, ##args)
+#define _SDEBUG(s, format, args...)                                     \
+    ap_log_error(APLOG_MARK, V8_DEBUG_LOG_LEVEL, 0,                     \
+                 s, "[V8_DEBUG] %s(%d): "format, __FILE__, __LINE__, ##args)
+#define _PDEBUG(p, format, args...)                                     \
+    ap_log_perror(APLOG_MARK, V8_DEBUG_LOG_LEVEL, 0,                    \
+                  p, "[V8_DEBUG] %s(%d): "format, __FILE__, __LINE__, ##args)
 
 /* json function */
-#define V8_JSON_OBJECT                                         \
+#define V8_JSON_OBJECT()                                        \
     v8::Local<v8::Context> context = v8::Context::GetCurrent(); \
     v8::Local<v8::Object> global = context->Global();           \
     v8::Local<v8::Object> json =                                \
@@ -35,7 +56,7 @@ extern "C" {
 
 static v8::Handle<v8::Value> v8_objectTojson(v8::Handle<v8::Value> obj)
 {
-    V8_JSON_OBJECT;
+    V8_JSON_OBJECT();
 
     v8::Local<v8::Function> json_stringify =
         v8::Local<v8::Function>::Cast(json->Get(v8::String::New("stringify")));
@@ -45,7 +66,7 @@ static v8::Handle<v8::Value> v8_objectTojson(v8::Handle<v8::Value> obj)
 
 static v8::Handle<v8::Value> v8_jsonToobject(v8::Handle<v8::Value> str)
 {
-    V8_JSON_OBJECT;
+    V8_JSON_OBJECT();
 
     v8::Local<v8::Function> json_parse =
         v8::Local<v8::Function>::Cast(json->Get(v8::String::New("parse")));
@@ -54,12 +75,13 @@ static v8::Handle<v8::Value> v8_jsonToobject(v8::Handle<v8::Value> str)
 }
 
 /* callback function */
-#define V8_CALLBACK_PARAMS(internal)                                    \
-    v8::HandleScope scope;                                              \
-    v8::Local<v8::Object> self = args.Holder();                         \
-    v8::Local<v8::External> wrap =                                      \
-        v8::Local<v8::External>::Cast(self->GetInternalField(internal))
-#define V8_CALLBACK_AP_REC                                      \
+#define V8_AP_WRAP(num)                                             \
+    v8::HandleScope scope;                                          \
+    v8::Local<v8::Object> self = args.Holder();                     \
+    v8::Local<v8::External> wrap =                                  \
+        v8::Local<v8::External>::Cast(self->GetInternalField(num))
+
+#define V8_AP_REQUEST()                                         \
     request_rec *r = static_cast<request_rec*>(wrap->Value())
 
 static v8::Handle<v8::Value> v8_log(const v8::Arguments& args)
@@ -68,8 +90,8 @@ static v8::Handle<v8::Value> v8_log(const v8::Arguments& args)
         return v8::Undefined();
     }
 
-    V8_CALLBACK_PARAMS(0);
-    V8_CALLBACK_AP_REC;
+    V8_AP_WRAP(0);
+    V8_AP_REQUEST();
 
     v8::String::Utf8Value value(args[0]->ToString());
 
@@ -84,8 +106,8 @@ static v8::Handle<v8::Value> v8_rputs(const v8::Arguments& args)
         return v8::Undefined();
     }
 
-    V8_CALLBACK_PARAMS(0);
-    V8_CALLBACK_AP_REC;
+    V8_AP_WRAP(0);
+    V8_AP_REQUEST();
 
     v8::String::Utf8Value value(args[0]->ToString());
 
@@ -100,8 +122,8 @@ static v8::Handle<v8::Value> v8_set_content_type(const v8::Arguments& args)
         return v8::Undefined();
     }
 
-    V8_CALLBACK_PARAMS(0);
-    V8_CALLBACK_AP_REC;
+    V8_AP_WRAP(0);
+    V8_AP_REQUEST();
 
     v8::String::Utf8Value value(args[0]->ToString());
 
@@ -151,8 +173,8 @@ static v8::Handle<v8::Value> v8_require(const v8::Arguments& args)
         return v8::Undefined();
     }
 
-    V8_CALLBACK_PARAMS(0);
-    V8_CALLBACK_AP_REC;
+    V8_AP_WRAP(0);
+    V8_AP_REQUEST();
 
     v8::String::Utf8Value value(args[0]->ToString());
 
@@ -166,27 +188,27 @@ static v8::Handle<v8::Value> v8_require(const v8::Arguments& args)
                        APR_READ | APR_BINARY | APR_XTHREAD, APR_OS_DEFAULT,
                        r->pool);
     if (rv != APR_SUCCESS) {
-        _V8_RERR(r, "file open: %s", *value);
+        _RERR(r, "file open: %s", *value);
         return scope.Close(v8::Undefined());
     }
 
     rv = apr_file_info_get(&fi, APR_FINFO_SIZE, fp);
     if (rv != APR_SUCCESS || fi.size <= 0) {
-        _V8_RERR(r, "file info: %s", *value);
+        _RERR(r, "file info: %s", *value);
         apr_file_close(fp);
         return scope.Close(v8::Undefined());
     }
 
     src = apr_palloc(r->pool, fi.size);
     if (!src) {
-        _V8_RERR(r, "apr_palloc");
+        _RERR(r, "apr_palloc");
         apr_file_close(fp);
         return scope.Close(v8::Undefined());
     }
 
     rv = apr_file_read_full(fp, src, fi.size, &bytes);
     if (rv != APR_SUCCESS || bytes != fi.size) {
-        _V8_RERR(r, "file read: %s", *value);
+        _RERR(r, "file read: %s", *value);
         apr_file_close(fp);
         return scope.Close(v8::Undefined());
     }
@@ -200,7 +222,7 @@ static v8::Handle<v8::Value> v8_require(const v8::Arguments& args)
 
     if (result.IsEmpty()) {
         v8::String::Utf8Value error(try_catch.Exception());
-        _V8_RERR(r, "require(%s) Failed: %s", r->filename, *error);
+        _RERR(r, "require(%s) Failed: %s", r->filename, *error);
         return scope.Close(v8::Undefined());
     } else {
         return scope.Close(result);
@@ -213,8 +235,8 @@ static v8::Handle<v8::Value> v8_request(const v8::Arguments& args)
         return v8::Undefined();
     }
 
-    V8_CALLBACK_PARAMS(0);
-    V8_CALLBACK_AP_REC;
+    V8_AP_WRAP(0);
+    V8_AP_REQUEST();
 
     v8::String::Utf8Value value(args[0]->ToString());
 
@@ -241,8 +263,8 @@ static v8::Handle<v8::Value> v8_request(const v8::Arguments& args)
 
 static v8::Handle<v8::Value> v8_header(const v8::Arguments& args)
 {
-    V8_CALLBACK_PARAMS(0);
-    V8_CALLBACK_AP_REC;
+    V8_AP_WRAP(0);
+    V8_AP_REQUEST();
 
     if (args.Length() >= 1) {
         v8::String::Utf8Value value(args[0]->ToString());
@@ -274,7 +296,7 @@ static v8::Handle<v8::Value> v8_params(const v8::Arguments& args)
         return v8::Undefined();
     }
 
-    V8_CALLBACK_PARAMS(1);
+    V8_AP_WRAP(1);
 
     v8::String::Utf8Value value(args[0]->ToString());
 
@@ -311,7 +333,7 @@ static v8::Handle<v8::Value> v8_toJson(const v8::Arguments& args)
         return v8::Undefined();
     }
 
-    V8_CALLBACK_PARAMS(0);
+    V8_AP_WRAP(0);
 
     v8::Handle<v8::Value> arg = args[0];
 
@@ -320,8 +342,8 @@ static v8::Handle<v8::Value> v8_toJson(const v8::Arguments& args)
 
     if (result.IsEmpty()) {
         v8::String::Utf8Value error(try_catch.Exception());
-        V8_CALLBACK_AP_REC;
-        _V8_RERR(r, "toJson(%s) Failed: %s", r->filename, *error);
+        V8_AP_REQUEST();
+        _RERR(r, "toJson(%s) Failed: %s", r->filename, *error);
         return scope.Close(v8::Undefined());
     } else {
         return scope.Close(result);
@@ -334,7 +356,7 @@ static v8::Handle<v8::Value> v8_fromJson(const v8::Arguments& args)
         return v8::Undefined();
     }
 
-    V8_CALLBACK_PARAMS(0);
+    V8_AP_WRAP(0);
 
     v8::Handle<v8::Value> arg = args[0];
 
@@ -342,8 +364,8 @@ static v8::Handle<v8::Value> v8_fromJson(const v8::Arguments& args)
     v8::Handle<v8::Value> result = v8_jsonToobject(arg);
     if (result.IsEmpty()) {
         v8::String::Utf8Value error(try_catch.Exception());
-        V8_CALLBACK_AP_REC;
-        _V8_RERR(r, "fromJson(%s) Failed: %s", r->filename, *error);
+        V8_AP_REQUEST();
+        _RERR(r, "fromJson(%s) Failed: %s", r->filename, *error);
         return scope.Close(v8::Undefined());
     } else {
         return scope.Close(result);
@@ -424,7 +446,7 @@ public:
         v8::Handle<v8::Script> script = v8::Script::Compile(source);
         if (script.IsEmpty()) {
             v8::String::Utf8Value error(try_catch.Exception());
-            _V8_RERR(r, "Script(%s) Failed: %s", r->filename, *error);
+            _RERR(r, "Script(%s) Failed: %s", r->filename, *error);
             return false;
         }
 
@@ -432,7 +454,7 @@ public:
         v8::Handle<v8::Value> result = script->Run();
         if (result.IsEmpty()) {
             v8::String::Utf8Value error(try_catch.Exception());
-            _V8_RERR(r, "Script(%s) Failed: %s", r->filename, *error);
+            _RERR(r, "Script(%s) Failed: %s", r->filename, *error);
             return false;
         }
 
@@ -447,7 +469,6 @@ private:
 
     v8::Handle<v8::Object> ap_;
     v8::Local<v8::Context> context_;
-
 };
 }
 
