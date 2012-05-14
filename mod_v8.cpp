@@ -259,7 +259,7 @@ static int v8_handler(request_rec *r)
         apr_pool_create(&ptemp, r->pool);
         if (v8_read_file(r->filename, &src, &len,
                          r->pool, ptemp) == APR_SUCCESS) {
-            if (!config->js->run(src, len, r, params)) {
+            if (!config->js->run(src, len, r, params, &retval)) {
                 retval = HTTP_INTERNAL_SERVER_ERROR;
             }
         } else {

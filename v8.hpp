@@ -116,7 +116,7 @@ static v8::Handle<v8::Value> v8_rputs(const v8::Arguments& args)
     return scope.Close(v8::Undefined());
 }
 
-static v8::Handle<v8::Value> v8_set_content_type(const v8::Arguments& args)
+static v8::Handle<v8::Value> v8_content_type(const v8::Arguments& args)
 {
     if (args.Length() < 1) {
         return v8::Undefined();
@@ -167,7 +167,7 @@ static v8::Handle<v8::Value> v8_dirname(const v8::Arguments& args)
     return v8::String::New(*value);
 }
 
-static v8::Handle<v8::Value> v8_require(const v8::Arguments& args)
+static v8::Handle<v8::Value> v8_include(const v8::Arguments& args)
 {
     if (args.Length() < 1) {
         return v8::Undefined();
@@ -372,6 +372,36 @@ static v8::Handle<v8::Value> v8_fromJson(const v8::Arguments& args)
     }
 }
 
+static v8::Handle<v8::Value> v8_response_header(const v8::Arguments& args)
+{
+    V8_AP_WRAP(0);
+    V8_AP_REQUEST();
+
+    if (args.Length() < 2) {
+        return scope.Close(v8::Undefined());
+    }
+
+    v8::String::Utf8Value key(args[0]->ToString());
+    v8::String::Utf8Value value(args[1]->ToString());
+
+    apr_table_set(r->headers_out, *key, *value);
+
+    return scope.Close(v8::Boolean::New(true));
+}
+
+static v8::Handle<v8::Value> v8_response_code(const v8::Arguments& args)
+{
+    V8_AP_WRAP(2);
+
+    if (args.Length() >= 1 && args[0]->IsNumber()) {
+        int *code = (int *)(wrap->Value());
+        *code = args[0]->ToInt32()->Int32Value();
+        return scope.Close(v8::Boolean::New(true));
+    }
+
+    return scope.Close(v8::Undefined());
+}
+
 /* V8::js class */
 namespace V8 {
 class js
@@ -392,17 +422,13 @@ public:
 
         //ap(apache) object template.
         v8::Handle<v8::ObjectTemplate> ap_tmpl = v8::ObjectTemplate::New();
-        ap_tmpl->SetInternalFieldCount(2);
+        ap_tmpl->SetInternalFieldCount(3);
         ap_tmpl->Set(v8::String::New("log"),
                      v8::FunctionTemplate::New(v8_log));
-        ap_tmpl->Set(v8::String::New("rputs"),
-                     v8::FunctionTemplate::New(v8_rputs));
-        ap_tmpl->Set(v8::String::New("content_type"),
-                     v8::FunctionTemplate::New(v8_set_content_type));
         ap_tmpl->Set(v8::String::New("dirname"),
                      v8::FunctionTemplate::New(v8_dirname));
-        ap_tmpl->Set(v8::String::New("require"),
-                     v8::FunctionTemplate::New(v8_require));
+        ap_tmpl->Set(v8::String::New("include"),
+                     v8::FunctionTemplate::New(v8_include));
         ap_tmpl->Set(v8::String::New("toJson"),
                      v8::FunctionTemplate::New(v8_toJson));
         ap_tmpl->Set(v8::String::New("fromJson"),
@@ -420,6 +446,16 @@ public:
         ap_tmpl->Set(v8::String::New("params"),
                      v8::FunctionTemplate::New(v8_params));
 
+        //Response function.
+        ap_tmpl->Set(v8::String::New("content_type"),
+                     v8::FunctionTemplate::New(v8_content_type));
+        ap_tmpl->Set(v8::String::New("rputs"),
+                     v8::FunctionTemplate::New(v8_rputs));
+        ap_tmpl->Set(v8::String::New("rheader"),
+                     v8::FunctionTemplate::New(v8_response_header));
+        ap_tmpl->Set(v8::String::New("rcode"),
+                     v8::FunctionTemplate::New(v8_response_code));
+
         //object instance.
         ap_ = ap_tmpl->NewInstance();
         context_->Global()->Set(v8::String::New("ap"), ap_);
@@ -434,11 +470,12 @@ public:
     }
 
     bool run(const char *src, apr_size_t len,
-             request_rec *r, apr_table_t *params) {
+             request_rec *r, apr_table_t *params, int *code) {
         v8::TryCatch try_catch;
 
         ap_->SetInternalField(0, v8::External::New(r));
         ap_->SetInternalField(1, v8::External::New(params));
+        ap_->SetInternalField(2, v8::External::New(code));
 
         v8::Handle<v8::String> source = v8::String::New(src, len);
 

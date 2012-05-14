@@ -70,13 +70,24 @@ test.v8:
     //dirname: ap.dirname(#val#)
     ap.rputs(ap.dirname(ap.request.filename) + "\n");
 
-    //require: ap.require(#val#)
-    ap.require(ap.dirname(ap.request.filename) + "/sub.v8");
+    //include: ap.include(#val#)
+    ap.include(ap.dirname(ap.include.filename) + "/sub.v8");
+
+    //json: ap.toJson(#val#)
+    var obj = { test: "TEST", hoge:"HOGE" };
+    ap.rputs(ap.toJson(obj) + "\n");
 
     //content-type: ap.content_type(#val#)
     //default: text/plain; charset=UTF-8
     ap.content_type("text/html; charset=UTF-8");
 
-    //json: ap.toJson(#val#)
-    var obj = { test: "TEST", hoge:"HOGE" };
-    ap.rputs(ap.toJson(obj) + "\n");
+    //Reponse header: Location
+    ap.rheader("Location", "hoge.html");
+    ap.rcode(302);
+
+    //Cookie: read
+    cookie = ap.header("Cookie");
+    ap.rputs(cookie + "\n");
+
+    //Cookie: write
+    ap.rheader("Set-Cookie", "hoge=1");

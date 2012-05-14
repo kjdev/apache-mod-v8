@@ -56,11 +56,11 @@ ap.rputs("----- Directory name -----\n");
 var dir = ap.dirname(filename);
 ap.rputs(dir + "\n");
 
-//require
-//ap.require(#val#)
-ap.rputs("----- Require -----\n");
+//include
+//ap.include(#val#)
+ap.rputs("----- Include -----\n");
 
-ap.require(dir + '/sub.v8');
+ap.include(dir + '/sub.v8');
 
 sub_function();
 ap.rputs(sub_data + "\n");
@@ -80,3 +80,14 @@ var str = '{ "a": "A", "b":"B" }';
 ap.rputs(str + "\n");
 ap.rputs(ap.fromJson(str) + "\n");
 ap.rputs(ap.toJson(ap.fromJson(str)) + "\n");
+
+//Reponse header: Location
+//ap.rheader("Location", "hoge.html");
+//ap.rcode(302);
+
+//Cookie: read
+//var cookie = ap.header("Cookie");
+//ap.rputs(cookie + "\n");
+
+//Cookie: write
+//ap.rheader("Set-Cookie", "hoge=1");
